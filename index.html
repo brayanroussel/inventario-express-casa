@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta charset="UTF-8">
+    <title>Inventario Express - Sin Base de Datos</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; -webkit-tap-highlight-color: transparent; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .btn-active { border-bottom: 3px solid #3b82f6; color: #3b82f6; }
+        input[type="number"] { font-size: 16px; } /* Evita zoom automático en iOS */
+    </style>
+</head>
+<body class="pb-10">
+
+<header class="bg-slate-900 text-white shadow-md sticky top-0 z-40">
+    <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+        <h1 class="text-lg font-bold flex items-center gap-2">🌽 Inventario Local</h1>
+        <nav class="flex gap-4">
+            <button onclick="showTab('principal')" id="btn-tab-principal" class="text-sm pb-1 font-medium btn-active">Panel</button>
+            <button onclick="showTab('historial')" id="btn-tab-historial" class="text-sm pb-1 font-medium text-slate-400">Historial</button>
+        </nav>
+    </div>
+</header>
+
+<main class="container mx-auto px-4 py-4">
+    
+    <!-- Tab Principal -->
+    <div id="tab-principal" class="tab-content active">
+        
+        <!-- Estado Jornada -->
+        <div class="bg-white p-4 rounded-xl shadow-sm mb-4 flex items-center justify-between border border-slate-200">
+            <div id="status-display" class="flex items-center gap-2 font-bold text-xs sm:text-sm text-slate-600 uppercase tracking-wide">
+                <span class="w-3 h-3 rounded-full bg-red-500"></span> JORNADA CERRADA
+            </div>
+            <div class="flex gap-2">
+                <button id="btn-inicio" onclick="toggleJornada(true)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-bold transition-all">Iniciar Día</button>
+                <button id="btn-cierre" onclick="confirmarCierre()" class="hidden bg-rose-600 hover:bg-rose-700 text-white px-3 py-2 rounded-lg text-sm font-bold transition-all">Cerrar</button>
+            </div>
+        </div>
+
+        <!-- Stats Rápidos - Scroll horizontal en móvil -->
+        <div class="flex overflow-x-auto gap-3 mb-6 pb-2 no-scrollbar sm:grid sm:grid-cols-3 sm:overflow-visible">
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-w-[140px] flex-1">
+                <p class="text-[10px] text-slate-400 font-bold uppercase">Lbs Hoy</p>
+                <p id="stat-lbs" class="text-xl font-bold text-slate-800">0.00</p>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-w-[140px] flex-1">
+                <p class="text-[10px] text-slate-400 font-bold uppercase">Ventas Lps</p>
+                <p id="stat-ventas" class="text-xl font-bold text-blue-600">0.00</p>
+            </div>
+            <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm min-w-[140px] flex-1">
+                <p class="text-[10px] text-slate-400 font-bold uppercase">Ganancia</p>
+                <p id="stat-ganancia" class="text-xl font-bold text-emerald-600">0.00</p>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- Formulario -->
+            <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm h-fit">
+                <h2 class="font-bold text-slate-700 mb-4 border-b pb-2 text-sm uppercase tracking-wider">➕ Nuevo Saco</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1">PRODUCTO</label>
+                        <select id="in-producto" class="w-full border p-3 rounded-lg bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                            <option value="Maíz">🌽 Maíz</option>
+                            <option value="Frijol">🫘 Frijol</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Peso (Lbs)</label>
+                        <input type="number" id="in-libras" value="100" class="w-full border p-3 rounded-lg bg-slate-50 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Costo Total (Lps)</label>
+                        <input type="number" id="in-costo" placeholder="0.00" class="w-full border p-3 rounded-lg bg-slate-50 text-sm">
+                    </div>
+                    <button onclick="crearSaco()" class="w-full bg-slate-800 text-white py-3 rounded-lg font-bold hover:bg-slate-900 transition-colors text-sm">Guardar Saco</button>
+                </div>
+            </div>
+
+            <!-- Tabla Inventario -->
+            <div class="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="p-4 bg-slate-50 border-b">
+                    <h2 class="font-bold text-slate-700 text-sm uppercase tracking-wider">📦 Existencias</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="text-[10px] font-bold text-slate-400 bg-slate-50 uppercase border-b">
+                            <tr>
+                                <th class="px-4 py-3">Producto</th>
+                                <th class="px-4 py-3">Stock</th>
+                                <th class="px-4 py-3 text-right">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lista-inventario" class="divide-y divide-slate-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab Historial -->
+    <div id="tab-historial" class="tab-content">
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="p-4 bg-slate-50 border-b flex justify-between items-center">
+                <h2 class="font-bold text-slate-700 text-sm uppercase">📜 Historial de Cierres</h2>
+                <button onclick="borrarTodoHistorial()" class="text-[10px] text-red-500 font-bold hover:underline uppercase">Borrar Todo</button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left">
+                    <thead class="text-[10px] font-bold text-slate-400 bg-slate-50 uppercase border-b">
+                        <tr>
+                            <th class="px-4 py-3">Fecha</th>
+                            <th class="px-4 py-3">Vendido</th>
+                            <th class="px-4 py-3 text-right">Utilidad</th>
+                        </tr>
+                    </thead>
+                    <tbody id="lista-historial" class="divide-y divide-slate-100 text-sm"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- Modal Venta -->
+<div id="modal-venta" class="fixed inset-0 bg-slate-900/60 hidden items-end sm:items-center justify-center p-0 sm:p-4 z-50 animate-in fade-in duration-200">
+    <div class="bg-white rounded-t-3xl sm:rounded-2xl w-full max-w-sm p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
+        <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 sm:hidden"></div>
+        
+        <h3 id="modal-prod-nombre" class="text-xl font-bold mb-1">Vender</h3>
+        <p id="modal-prod-stock" class="text-xs text-slate-400 mb-6 uppercase font-bold tracking-tight">Stock disponible: 0 lbs</p>
+        
+        <div class="space-y-5">
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 mb-1 uppercase">Cantidad (Lbs)</label>
+                <input type="number" id="v-cantidad" class="w-full border p-3 rounded-xl bg-slate-50 text-xl font-bold outline-none focus:ring-2 focus:ring-blue-500" placeholder="0.0">
+            </div>
+
+            <div id="section-cal" class="hidden bg-orange-50 p-3 rounded-xl border border-orange-100 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">⚪</span>
+                    <div>
+                        <p class="text-xs font-bold text-orange-800">¿Vender Cal?</p>
+                        <p class="text-[10px] text-orange-600">Suma L. 3.00 a la venta</p>
+                    </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="v-cal-toggle" class="sr-only peer">
+                    <div class="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
+                </label>
+            </div>
+
+            <div>
+                <label class="block text-[10px] font-bold text-slate-500 mb-2 uppercase">Precio sugerido (Lps)</label>
+                <div id="v-precios-sugeridos" class="grid grid-cols-3 gap-2 mb-3"></div>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">L.</span>
+                    <input type="number" id="v-precio" placeholder="Precio lb" class="w-full border p-3 pl-8 rounded-xl bg-slate-50 text-lg font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-4">
+                <button onclick="cerrarModal()" class="flex-1 py-3 text-slate-500 font-bold text-sm uppercase">Cancelar</button>
+                <button onclick="procesarVenta()" class="flex-1 bg-blue-600 text-white py-3 rounded-xl font-bold shadow-lg shadow-blue-200 text-sm uppercase">Confirmar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ESTADO GLOBAL (LOCALSTORAGE)
+    let inventario = JSON.parse(localStorage.getItem('granos_inv')) || [];
+    let ventasHoy = JSON.parse(localStorage.getItem('granos_ventas')) || [];
+    let historial = JSON.parse(localStorage.getItem('granos_hist')) || [];
+    let jornadaActiva = JSON.parse(localStorage.getItem('granos_jornada')) || false;
+    let sacoSeleccionado = null;
+
+    window.onload = () => {
+        actualizarUI();
+    };
+
+    function actualizarUI() {
+        renderInventario();
+        renderHistorial();
+        actualizarStats();
+        
+        const status = document.getElementById('status-display');
+        const btnIn = document.getElementById('btn-inicio');
+        const btnOut = document.getElementById('btn-cierre');
+
+        if(jornadaActiva) {
+            status.innerHTML = '<span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span> JORNADA ABIERTA';
+            btnIn.classList.add('hidden');
+            btnOut.classList.remove('hidden');
+        } else {
+            status.innerHTML = '<span class="w-3 h-3 rounded-full bg-red-500"></span> JORNADA CERRADA';
+            btnIn.classList.remove('hidden');
+            btnOut.classList.add('hidden');
+        }
+    }
+
+    function toggleJornada(estado) {
+        jornadaActiva = estado;
+        localStorage.setItem('granos_jornada', JSON.stringify(estado));
+        actualizarUI();
+        msg(estado ? "Día iniciado" : "Día finalizado", "info");
+    }
+
+    function confirmarCierre() {
+        if(!confirm("¿Deseas cerrar el día? Se guardará el resumen en el historial.")) return;
+        
+        const totalV = ventasHoy.reduce((acc, v) => acc + (v.cantidad * v.precio) + (v.cal ? 3 : 0), 0);
+        const totalU = ventasHoy.reduce((acc, v) => acc + v.utilidad, 0);
+
+        if(ventasHoy.length > 0) {
+            historial.push({
+                fecha: new Date().toLocaleDateString(),
+                timestamp: Date.now(),
+                totalVenta: totalV,
+                totalUtilidad: totalU
+            });
+            localStorage.setItem('granos_hist', JSON.stringify(historial));
+        }
+
+        ventasHoy = [];
+        localStorage.setItem('granos_ventas', JSON.stringify(ventasHoy));
+        toggleJornada(false);
+    }
+
+    function crearSaco() {
+        const prod = document.getElementById('in-producto').value;
+        const lbs = parseFloat(document.getElementById('in-libras').value);
+        const costo = parseFloat(document.getElementById('in-costo').value);
+
+        if(!lbs || !costo) return msg("Llena los campos correctamente", "error");
+
+        const nuevo = {
+            id: Date.now(),
+            producto: prod,
+            libras: lbs,
+            costoUnitario: costo / lbs
+        };
+
+        inventario.push(nuevo);
+        localStorage.setItem('granos_inv', JSON.stringify(inventario));
+        document.getElementById('in-costo').value = "";
+        actualizarUI();
+        msg("Saco agregado con éxito");
+    }
+
+    function renderInventario() {
+        const lista = document.getElementById('lista-inventario');
+        lista.innerHTML = "";
+        
+        if(inventario.length === 0) {
+            lista.innerHTML = '<tr><td colspan="3" class="p-6 text-center text-slate-400 text-xs">No hay producto. Agrega un saco.</td></tr>';
+            return;
+        }
+
+        inventario.forEach(saco => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-4">
+                    <div class="font-bold text-slate-700 text-sm">${saco.producto === 'Maíz' ? '🌽 Maíz' : '🫘 Frijol'}</div>
+                    <div class="text-[9px] text-slate-400 uppercase font-bold tracking-tighter">Costo lb: L. ${saco.costoUnitario.toFixed(2)}</div>
+                </td>
+                <td class="px-4 py-4 font-bold text-slate-600 text-sm">${saco.libras.toFixed(1)} <span class="text-[9px] text-slate-400">LBS</span></td>
+                <td class="px-4 py-4 text-right">
+                    <button onclick="abrirVenta(${saco.id})" class="bg-blue-600 text-white px-3 py-1.5 rounded-lg font-bold text-[11px] uppercase tracking-wide shadow-sm active:scale-95 transition-transform">Vender</button>
+                </td>
+            `;
+            lista.appendChild(tr);
+        });
+    }
+
+    function abrirVenta(id) {
+        if(!jornadaActiva) return msg("Debes INICIAR EL DÍA primero", "error");
+        
+        sacoSeleccionado = inventario.find(s => s.id === id);
+        document.getElementById('modal-prod-nombre').textContent = "Vender " + sacoSeleccionado.producto;
+        document.getElementById('modal-prod-stock').textContent = "Stock disponible: " + sacoSeleccionado.libras.toFixed(2) + " lbs";
+        document.getElementById('v-cantidad').value = "";
+        document.getElementById('v-cal-toggle').checked = false;
+        
+        // Mostrar sección cal solo si es Maíz
+        const sectionCal = document.getElementById('section-cal');
+        if(sacoSeleccionado.producto === 'Maíz') {
+            sectionCal.classList.remove('hidden');
+        } else {
+            sectionCal.classList.add('hidden');
+        }
+
+        let sugeridos = [];
+        let precioDefault = 0;
+
+        if (sacoSeleccionado.producto === 'Maíz') {
+            sugeridos = [6, 6.5, 7, 7.5, 8, 8.5];
+            precioDefault = 7.5;
+        } else {
+            sugeridos = [20, 21, 22, 23, 24, 25, 26];
+            precioDefault = 23;
+        }
+
+        document.getElementById('v-precio').value = precioDefault;
+        
+        const container = document.getElementById('v-precios-sugeridos');
+        container.innerHTML = "";
+        sugeridos.forEach(p => {
+            const b = document.createElement('button');
+            b.className = "bg-slate-100 py-2 rounded-lg font-bold text-xs hover:bg-slate-200 transition-colors";
+            b.textContent = p;
+            b.onclick = () => document.getElementById('v-precio').value = p;
+            container.appendChild(b);
+        });
+
+        document.getElementById('modal-venta').classList.replace('hidden', 'flex');
+        document.body.style.overflow = 'hidden'; // Evita scroll de fondo
+    }
+
+    function procesarVenta() {
+        const cant = parseFloat(document.getElementById('v-cantidad').value);
+        const precio = parseFloat(document.getElementById('v-precio').value);
+        const vendeCal = document.getElementById('v-cal-toggle').checked;
+
+        if(!cant || !precio || cant > sacoSeleccionado.libras) {
+            return msg("Datos inválidos", "error");
+        }
+
+        // Utilidad base de los granos + los 3 Lps de la cal (la cal se considera ganancia pura en este modelo)
+        const utilidadGranos = (precio - sacoSeleccionado.costoUnitario) * cant;
+        const utilidadCal = vendeCal ? 3 : 0;
+        const utilidadTotal = utilidadGranos + utilidadCal;
+
+        ventasHoy.push({
+            producto: sacoSeleccionado.producto,
+            cantidad: cant,
+            precio: precio,
+            cal: vendeCal,
+            utilidad: utilidadTotal
+        });
+
+        sacoSeleccionado.libras -= cant;
+        if(sacoSeleccionado.libras <= 0.05) {
+            inventario = inventario.filter(s => s.id !== sacoSeleccionado.id);
+        }
+
+        localStorage.setItem('granos_inv', JSON.stringify(inventario));
+        localStorage.setItem('granos_ventas', JSON.stringify(ventasHoy));
+        
+        cerrarModal();
+        actualizarUI();
+        msg("Venta realizada");
+    }
+
+    function actualizarStats() {
+        const lbs = ventasHoy.reduce((acc, v) => acc + v.cantidad, 0);
+        // Total ventas incluye el precio de los granos + 3 Lps si hubo cal
+        const total = ventasHoy.reduce((acc, v) => acc + (v.cantidad * v.precio) + (v.cal ? 3 : 0), 0);
+        const util = ventasHoy.reduce((acc, v) => acc + v.utilidad, 0);
+
+        document.getElementById('stat-lbs').textContent = lbs.toFixed(1);
+        document.getElementById('stat-ventas').textContent = "L. " + total.toFixed(0);
+        document.getElementById('stat-ganancia').textContent = "L. " + util.toFixed(0);
+    }
+
+    function renderHistorial() {
+        const lista = document.getElementById('lista-historial');
+        lista.innerHTML = "";
+        historial.slice().reverse().forEach(h => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-4 py-4 font-bold text-slate-700">${h.fecha}</td>
+                <td class="px-4 py-4 text-blue-600 font-bold">L. ${h.totalVenta.toFixed(0)}</td>
+                <td class="px-4 py-4 text-emerald-600 font-bold text-right">L. ${h.totalUtilidad.toFixed(0)}</td>
+            `;
+            lista.appendChild(tr);
+        });
+    }
+
+    function showTab(tab) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.getElementById('tab-' + tab).classList.add('active');
+        
+        document.getElementById('btn-tab-principal').classList.remove('btn-active');
+        document.getElementById('btn-tab-historial').classList.remove('btn-active');
+        document.getElementById('btn-tab-' + tab).classList.add('btn-active');
+        
+        document.getElementById('btn-tab-principal').classList.add('text-slate-400');
+        document.getElementById('btn-tab-historial').classList.add('text-slate-400');
+        document.getElementById('btn-tab-' + tab).classList.replace('text-slate-400', 'btn-active');
+    }
+
+    function cerrarModal() {
+        document.getElementById('modal-venta').classList.replace('flex', 'hidden');
+        document.body.style.overflow = 'auto';
+    }
+
+    function borrarTodoHistorial() {
+        if(confirm("¿Eliminar todos los registros?")) {
+            historial = [];
+            localStorage.setItem('granos_hist', JSON.stringify(historial));
+            actualizarUI();
+        }
+    }
+
+    function msg(texto, tipo = "success") {
+        const m = document.createElement('div');
+        m.className = `fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 px-6 py-3 rounded-xl text-white font-bold shadow-2xl z-[100] transition-all transform animate-bounce ${tipo === 'error' ? 'bg-rose-500' : 'bg-slate-800'} text-center text-sm`;
+        m.textContent = texto;
+        document.body.appendChild(m);
+        setTimeout(() => { m.style.opacity = '0'; setTimeout(() => m.remove(), 500); }, 2000);
+    }
+</script>
+
+<!-- Script aparte para registrar el Service Worker -->
+<script>
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+        navigator.serviceWorker.register("sw.js");
+    });
+}
+</script>
+
+
+</body>
+</html>
